@@ -1,0 +1,35 @@
+name: deploy
+
+# Deploys the showcase to Cloudflare Pages on every push to main.
+# Required repo secrets:
+#   CLOUDFLARE_API_TOKEN   - token with "Cloudflare Pages: Edit" on the plot.ws account
+#   CLOUDFLARE_ACCOUNT_ID  - the plot.ws account id
+#   VITE_PLOT_APP_KEY      - publishable demo app key (pl_pub_live_...) so the games connect
+# Optional:
+#   VITE_PLOT_API_URL      - override the API origin (defaults to https://api.plot.ws)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci || npm install
+      - name: Build
+        env:
+          VITE_PLOT_APP_KEY: ${{ secrets.VITE_PLOT_APP_KEY }}
+          VITE_PLOT_API_URL: ${{ secrets.VITE_PLOT_API_URL }}
+        run: npm run build
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=plot-showcase --branch=main
