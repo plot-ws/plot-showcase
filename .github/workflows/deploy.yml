@@ -1,6 +1,7 @@
 name: deploy
 
-# Deploys the showcase to Cloudflare Pages on every push to main.
+# Deploys the showcase to Cloudflare Pages on push to main — but only once the
+# Cloudflare secrets are present, so the workflow stays green until you add them.
 # Required repo secrets:
 #   CLOUDFLARE_API_TOKEN   - token with "Cloudflare Pages: Edit" on the plot.ws account
 #   CLOUDFLARE_ACCOUNT_ID  - the plot.ws account id
@@ -17,17 +18,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check for Cloudflare credentials
+        id: gate
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cloudflare secrets not set — skipping deploy. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to enable."
+          fi
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
         with:
           node-version: 20
-      - run: npm ci || npm install
+      - if: steps.gate.outputs.ready == 'true'
+        run: npm ci || npm install
       - name: Build
+        if: steps.gate.outputs.ready == 'true'
         env:
           VITE_PLOT_APP_KEY: ${{ secrets.VITE_PLOT_APP_KEY }}
           VITE_PLOT_API_URL: ${{ secrets.VITE_PLOT_API_URL }}
         run: npm run build
       - name: Deploy to Cloudflare Pages
+        if: steps.gate.outputs.ready == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
